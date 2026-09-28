@@ -1,0 +1,35 @@
+services:
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://sev:sev@postgres:5432/sev
+      REDIS_URL: redis://redis:6379/0
+      DEMO_MODE: "true"
+      CORS_ORIGINS: http://localhost:5173
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: sev
+      POSTGRES_USER: sev
+      POSTGRES_PASSWORD: sev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+volumes:
+  postgres_data:
