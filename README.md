@@ -1,62 +1,44 @@
-# SEV-AV-CARGO
+# SEV v1.1 - persistencia, proveedores y auditoría
 
-Sistema de pre-evaluación de infraestructura aeroportuaria, METAR y NOTAM para operaciones con Airbus A330-243F.
+Esta iteración incorpora:
 
-> **Alcance v1:** SEV no ejecuta Airbus PEP ni realiza cálculos de performance de despegue o aterrizaje. El resultado es una pre-evaluación que requiere validación operacional.
+- modelos SQLAlchemy y creación/migración Alembic;
+- persistencia de evaluaciones y resultados;
+- snapshots reproducibles y auditoría;
+- cliente FAA NOTAM bajo demanda con API key configurable;
+- cliente Aviation Weather Center METAR bajo demanda;
+- caché corta en memoria (5 minutos), sustituible por Redis sin cambiar el dominio;
+- registro y revisión manual de documentos AIP;
+- conectores AIP genérico/manual, Colombia AIS y FAA NASR como puntos de extensión;
+- modelo versionado para perfiles ACN y puntos de referencia;
+- autenticación Bearer opcional para entornos internos;
+- frontend de investigación y evaluación.
 
-## Stack
-
-- Backend: Python 3.12, FastAPI, Pydantic v2
-- Persistencia preparada: SQLAlchemy/Alembic + PostgreSQL
-- Caché opcional: Redis para consultas on-demand de corta duración
-- Proveedores: FAA NOTAM y Aviation Weather Center METAR
-- Frontend: React + TypeScript + Vite
-
-## Inicio rápido
-
-```bash
-docker compose up --build
-```
-
-API: `http://localhost:8000`
-Documentación OpenAPI: `http://localhost:8000/docs`
-Frontend: `http://localhost:5173`
-
-Para ejecutar el backend localmente:
+## Migraciones
 
 ```bash
 cd backend
-python -m venv .venv
-# Windows: .venv\\Scripts\\activate
-# Linux/macOS: source .venv/bin/activate
 pip install -e '.[dev]'
+alembic -c alembic.ini upgrade head
 uvicorn app.main:app --reload
 ```
 
-## Configuración
-
-Copiar `.env.example` a `.env`. El modo demo permite ejecutar la API sin credenciales ni acceso de red a proveedores externos.
-
-## Ejemplos
+En desarrollo, la API crea tablas automáticamente cuando `APP_ENV=development`. Para producción usar Alembic y PostgreSQL:
 
 ```bash
-curl http://localhost:8000/api/v1/health
-curl http://localhost:8000/api/v1/airports/SKUC
-curl http://localhost:8000/api/v1/airports/SKUC/notams/live
-curl 'http://localhost:8000/api/v1/airports/SKUC/weather/range?hours=24&temperature_min_c=18&temperature_max_c=35&qnh_min_hpa=1000&qnh_max_hpa=1025'
+DATABASE_URL=postgresql+psycopg://sev:sev@localhost:5432/sev alembic upgrade head
 ```
 
-## Limitaciones importantes
+## Proveedores
 
-- La consulta de NOTAM y METAR es únicamente bajo demanda; no hay recolectores en segundo plano.
-- Las AIP son heterogéneas por país. La v1 conserva documentos y ofrece un registro manual seguro; los conectores específicos se incorporan por fuente.
-- PCN no se convierte directamente a toneladas. Se usa peso explícito publicado cuando existe; ACN-PCN solo se evalúa con datos oficiales aplicables.
-- Un NOTAM no descodificable se conserva y genera advertencia, no bloqueo automático.
-- La v1 no autoriza operaciones ni sustituye despacho, performance, autoridad aeroportuaria o tripulación.
+Con `DEMO_MODE=true`, no se hacen llamadas externas. Para activar consultas reales configure `DEMO_MODE=false`, `FAA_NOTAM_API_KEY` y `AWC_BASE_URL`. La API de METAR de AWC permite consultar por ICAO y conserva hasta 30 días de datos, pero las solicitudes deben limitarse y respetar rate limits. FAA NOTAM requiere API key para el servicio REST; si falla la configuración, SEV devuelve error explícito y no inventa resultados.
 
-## Documentación
+## Auth
 
-- [Arquitectura](docs/architecture.md)
-- [Modelo de dominio](docs/domain-model.md)
-- [Reglas](docs/rules.md)
-- [Fuentes y limitaciones](docs/data-sources.md)
+`AUTH_ENABLED=false` es útil para desarrollo. En un entorno interno active `AUTH_ENABLED=true` y envíe:
+
+```text
+Authorization: Bearer <DEV_API_TOKEN>
+```
+
+El token de desarrollo debe reemplazarse por un proveedor corporativo OIDC/Entra ID antes de producción.
